@@ -137,11 +137,20 @@ function renderMemoryTable() {
     for (let i = 0; i < PAGE_SIZE; i++) {
         const addr = start + i;
         const val = memoryCache[addr];
+        
+        // Convert to string (2 ASCII chars)
+        const char1 = val & 0xFF;
+        const char2 = (val >> 8) & 0xFF;
+        const s1 = (char1 >= 32 && char1 <= 126) ? String.fromCharCode(char1) : '.';
+        const s2 = (char2 >= 32 && char2 <= 126) ? String.fromCharCode(char2) : '.';
+        const str = s1 + s2;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>D${addr}</td>
             <td class="val-dec" data-addr="${addr}">${val}</td>
             <td class="val-hex" data-addr="${addr}">0x${val.toString(16).padStart(4, '0').toUpperCase()}</td>
+            <td class="val-str" data-addr="${addr}">${str}</td>
         `;
         tbBody.appendChild(tr);
     }
@@ -274,7 +283,7 @@ function setupEventListeners() {
     // Edit Table Cells
     tbBody.addEventListener('dblclick', (e) => {
         const td = e.target.closest('td');
-        if (!td || td.cellIndex === 0) return; // Don't edit address column
+        if (!td || td.cellIndex === 0 || td.cellIndex === 3) return; // Don't edit address or string column
         
         const addr = parseInt(td.dataset.addr);
         const originalVal = memoryCache[addr];

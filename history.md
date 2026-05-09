@@ -35,6 +35,7 @@
     - WebSocket을 통한 실시간 데이터 스트리밍.
     - Monaco Editor를 통합한 실시간 스크립트 편집기.
     - 페이지네이션이 적용된 디바이스 뷰어 및 더블 클릭을 통한 데이터 직접 수정.
+    - **String View**: D-Register의 16비트 값을 2글자의 ASCII 문자열로 변환하여 표시하는 컬럼 추가.
 
 ### Phase 5: GitHub 통합 및 CI/CD
 - GitHub REST API를 활용하여 작업 단계별 이슈(Phase 1~6)와 맞춤형 라벨 자동 생성.
