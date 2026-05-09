@@ -1,0 +1,6 @@
+secrets.toml
+__pycache__/
+*.pyc
+data/config.json
+.vscode/
+setup_github.py
