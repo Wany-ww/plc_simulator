@@ -283,23 +283,49 @@ function setupEventListeners() {
     // Edit Table Cells
     tbBody.addEventListener('dblclick', (e) => {
         const td = e.target.closest('td');
-        if (!td || td.cellIndex === 0 || td.cellIndex === 3) return; // Don't edit address or string column
+        if (!td || td.cellIndex === 0) return; // Don't edit address column
         
         const addr = parseInt(td.dataset.addr);
         const originalVal = memoryCache[addr];
+        const colIndex = td.cellIndex;
         
         const input = document.createElement('input');
-        input.type = 'number';
-        input.value = originalVal;
+        if (colIndex === 1) { // Dec
+            input.type = 'number';
+            input.value = originalVal;
+        } else if (colIndex === 2) { // Hex
+            input.type = 'text';
+            input.value = originalVal.toString(16).padStart(4, '0').toUpperCase();
+        } else if (colIndex === 3) { // String
+            input.type = 'text';
+            input.maxLength = 2;
+            const char1 = originalVal & 0xFF;
+            const char2 = (originalVal >> 8) & 0xFF;
+            const s1 = (char1 >= 32 && char1 <= 126) ? String.fromCharCode(char1) : ' ';
+            const s2 = (char2 >= 32 && char2 <= 126) ? String.fromCharCode(char2) : ' ';
+            input.value = s1 + s2;
+        }
         
         td.classList.add('cell-editing');
         td.innerHTML = '';
         td.appendChild(input);
         input.focus();
+        if (input.type === 'text') input.select();
         
         const finishEdit = async () => {
             td.classList.remove('cell-editing');
-            let newVal = parseInt(input.value);
+            let newVal;
+            if (colIndex === 1) { // Dec
+                newVal = parseInt(input.value);
+            } else if (colIndex === 2) { // Hex
+                newVal = parseInt(input.value, 16);
+            } else if (colIndex === 3) { // String
+                const s = input.value || "";
+                const c1 = s.charCodeAt(0) || 0;
+                const c2 = s.charCodeAt(1) || 0;
+                newVal = (c1 & 0xFF) | ((c2 & 0xFF) << 8);
+            }
+
             if (isNaN(newVal)) newVal = originalVal;
             if (newVal < 0) newVal = 0;
             if (newVal > 65535) newVal = 65535;
