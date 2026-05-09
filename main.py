@@ -7,13 +7,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+from contextlib import asynccontextmanager
 
 from simulator.manager import PlcManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PLC Simulator API")
+main_loop = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    yield
+    await manager.stop_all()
+
+app = FastAPI(title="PLC Simulator API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,31 +92,21 @@ def plc_update_callback(plc_name: str, start_addr: int, length: int, values: Opt
         "values": values
     }
     # Need to run in event loop
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
+    try:
+        loop = asyncio.get_running_loop()
         loop.create_task(ws_manager.broadcast(json.dumps(msg)))
+    except RuntimeError:
+        if main_loop and main_loop.is_running():
+            main_loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(ws_manager.broadcast(json.dumps(msg)))
+            )
 
 manager.set_update_callback(plc_update_callback)
-
-@app.on_event("startup")
-async def startup_event():
-    # Start PLCs that were running (or maybe start none by default?)
-    # Let's not auto-start unless configured. For now, manual start.
-    pass
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await manager.stop_all()
-
-@app.get("/")
-async def get_index():
-    with open("static/index.html", "r", encoding="utf-8") as f:
-        return HTMLResponse(f.read())
 
 # --- REST API ---
 
 @app.get("/api/plcs")
-def get_plcs():
+async def get_plcs():
     res = []
     for name, plc in manager.plcs.items():
         res.append({
@@ -123,19 +123,19 @@ def get_plcs():
     return res
 
 @app.post("/api/plcs")
-def create_plc(config: PlcConfig):
-    cfg_dict = config.dict(exclude_none=True)
+async def create_plc(config: PlcConfig):
+    cfg_dict = config.model_dump(exclude_none=True)
     manager.create_plc(cfg_dict)
     return {"status": "ok"}
 
 @app.put("/api/plcs/{name}")
-def update_plc(name: str, config: PlcConfig):
-    cfg_dict = config.dict(exclude_none=True)
+async def update_plc(name: str, config: PlcConfig):
+    cfg_dict = config.model_dump(exclude_none=True)
     manager.update_plc(name, cfg_dict)
     return {"status": "ok"}
 
 @app.delete("/api/plcs/{name}")
-def delete_plc(name: str):
+async def delete_plc(name: str):
     manager.delete_plc(name)
     return {"status": "ok"}
 
@@ -156,17 +156,17 @@ async def stop_plc(name: str):
     return {"error": "Not found"}
 
 @app.get("/api/plcs/{name}/script")
-def get_script(name: str):
+async def get_script(name: str):
     code = manager.get_script(name)
     return {"code": code}
 
 @app.post("/api/plcs/{name}/script")
-def save_script(name: str, data: ScriptData):
+async def save_script(name: str, data: ScriptData):
     manager.save_script(name, data.code)
     return {"status": "ok"}
 
 @app.get("/api/plcs/{name}/memory")
-def get_memory(name: str, start: int = 0, length: int = 100):
+async def get_memory(name: str, start: int = 0, length: int = 100):
     plc = manager.get_plc(name)
     if not plc:
         return {"error": "Not found"}
@@ -177,7 +177,7 @@ def get_memory(name: str, start: int = 0, length: int = 100):
         return {"error": str(e)}
 
 @app.post("/api/plcs/{name}/memory")
-def write_memory(name: str, data: WriteData):
+async def write_memory(name: str, data: WriteData):
     plc = manager.get_plc(name)
     if not plc:
         return {"error": "Not found"}

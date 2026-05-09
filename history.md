@@ -39,6 +39,9 @@
     - **Memory Editing Enhancements**: 
         - Hex 컬럼 수정 시 Decimal 대신 Hex 문자열 입력 지원.
         - String 컬럼 더블 클릭 시 직접 문자열(2자)로 데이터 입력 기능 추가.
+- **Bug Fixes & Refactoring**:
+    - **Event Loop Fix**: REST API(Threadpool)에서 메모리 수정 시 WebSocket 브로드캐스트 과정에서 발생하던 `RuntimeError` 해결.
+    - **FastAPI Migration**: `on_event` 기반의 구형 API를 최신 `lifespan` API로 마이그레이션 및 동기 라우트를 비동기(`async def`)로 전환하여 안정성 향상.
 
 ### Phase 5: GitHub 통합 및 CI/CD
 - GitHub REST API를 활용하여 작업 단계별 이슈(Phase 1~6)와 맞춤형 라벨 자동 생성.
