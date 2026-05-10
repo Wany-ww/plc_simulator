@@ -3,7 +3,7 @@ import logging
 import random
 import os
 import traceback
-from .mc_protocol import MCProtocol3E
+from .mc_protocol import MCProtocolHandler
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class PlcSimulator:
         # Callback when D-registers change (for WebSocket UI updates)
         self.update_callback = update_callback
         
-        self.protocol = MCProtocol3E(self)
+        self.protocol = MCProtocolHandler(self)
         
         # Load user script
         self.script_globals = {}

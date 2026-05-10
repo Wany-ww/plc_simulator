@@ -196,12 +196,17 @@ function setupEventListeners() {
     document.getElementById('btn-confirm-new').onclick = async () => {
         const name = document.getElementById('new-plc-name').value;
         const port = document.getElementById('new-plc-port').value;
+        const series = document.getElementById('new-plc-series').value;
         if (!name) return;
         
         await fetch('/api/plcs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, port: parseInt(port) })
+            body: JSON.stringify({ 
+                name, 
+                port: parseInt(port),
+                series: series
+            })
         });
         modal.classList.remove('show');
         document.getElementById('new-plc-name').value = '';
