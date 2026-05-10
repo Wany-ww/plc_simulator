@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -102,6 +102,10 @@ def plc_update_callback(plc_name: str, start_addr: int, length: int, values: Opt
             )
 
 manager.set_update_callback(plc_update_callback)
+
+@app.get("/")
+async def read_index():
+    return FileResponse("static/index.html")
 
 # --- REST API ---
 
