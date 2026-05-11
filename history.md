@@ -43,9 +43,16 @@
     - **Event Loop Fix**: REST API(Threadpool)에서 메모리 수정 시 WebSocket 브로드캐스트 과정에서 발생하던 `RuntimeError` 해결.
     - **FastAPI Migration**: `on_event` 기반의 구형 API를 최신 `lifespan` API로 마이그레이션 및 동기 라우트를 비동기(`async def`)로 전환하여 안정성 향상.
 
-### Phase 5: GitHub 통합 및 CI/CD
-- GitHub REST API를 활용하여 작업 단계별 이슈(Phase 1~6)와 맞춤형 라벨 자동 생성.
-- `.github/workflows/ci.yml`을 통한 문법 검사 및 빌드 테스트 자동화.
+### Phase 6: 다중 선택 및 프로토콜 최적화 (2026-05-11)
+- **GUI 개선**:
+    - `Ctrl/Shift` 키를 이용한 PLC 인스턴스 다중 선택 기능 및 '전체 선택' 버튼 추가.
+    - 선택된 항목에 체크박스 형태의 표시기 추가 및 배경색 스타일 개선으로 시인성 확보.
+    - 다중 선택된 모든 PLC에 대해 Start/Stop 일괄 제어 기능 구현.
+- **프로토콜 및 메모리 최적화**:
+    - MC 프로토콜 Batch Read 시 최대 980 워드까지 지원하도록 검증.
+    - D-Register에 부호 있는 16비트 정수(Signed Short) 표시 및 수정 모드 추가.
+- **버그 수정**:
+    - D-Register에 음수 또는 잘못된 타입(문자열 등)이 대입되었을 때 MC 프로토콜 패킹 시 발생하던 `struct.error` 및 `TypeError` 수정.
 
 ## 3. 구현 내용 리뷰 및 자가 평가
 

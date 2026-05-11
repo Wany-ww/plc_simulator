@@ -67,6 +67,11 @@ body {
     font-weight: 600;
 }
 
+.sidebar-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .plc-list {
     list-style: none;
     overflow-y: auto;
@@ -90,8 +95,44 @@ body {
 }
 
 .plc-item.active {
-    background: rgba(59, 130, 246, 0.15);
+    background: rgba(59, 130, 246, 0.2);
     border-left: 3px solid var(--accent);
+}
+
+.plc-item.selected {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.plc-item.selected .selection-indicator {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.plc-item.selected .selection-indicator::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 5px;
+    width: 3px;
+    height: 7px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.plc-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.selection-indicator {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--text-secondary);
+    border-radius: 4px;
+    position: relative;
+    transition: all 0.2s;
 }
 
 .plc-name {
@@ -325,6 +366,30 @@ input[readonly] {
     background: rgba(0, 0, 0, 0.1);
     font-size: 0.85rem;
     color: var(--text-secondary);
+}
+
+.viewer-options {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-container input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+}
+
+.toggle-label {
+    font-size: 0.85rem;
 }
 
 .pagination {

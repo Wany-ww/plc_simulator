@@ -53,7 +53,15 @@ class PlcSimulator:
     def read_d_registers(self, start_addr, length):
         if start_addr + length > 65536:
             raise ValueError("Out of bounds")
-        return self.d[start_addr : start_addr + length]
+        res = []
+        for v in self.d[start_addr : start_addr + length]:
+            try:
+                # Ensure it's an integer before bitwise AND
+                val = int(v) if not isinstance(v, int) else v
+                res.append(val & 0xFFFF)
+            except (ValueError, TypeError):
+                res.append(0)
+        return res
 
     def write_d_registers(self, start_addr, values):
         length = len(values)

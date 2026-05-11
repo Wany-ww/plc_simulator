@@ -83,7 +83,7 @@ class MCProtocolHandler:
             
         try:
             values = self.plc.read_d_registers(address, length)
-            resp_data = struct.pack(f"<{length}H", *values)
+            resp_data = struct.pack(f"<{length}H", *[v & 0xFFFF for v in values])
             return (0x0000, resp_data)
         except Exception as e:
             logger.error(f"Read error: {e}")

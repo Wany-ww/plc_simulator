@@ -26,6 +26,8 @@ const elPageInfo = document.getElementById('page-info');
 // State
 let plcs = [];
 let currentPlc = null;
+let selectedPlcs = new Set();
+let viewAsSigned = false;
 let currentPage = 0;
 const PAGE_SIZE = 100;
 let editor = null;
@@ -50,30 +52,80 @@ async function fetchPlcs() {
             currentPlc = updated;
             updateHeaderStatus();
         } else {
-            selectPlc(null);
+            // If primary PLC is gone, pick another from selected if available
+            if (selectedPlcs.size > 0) {
+                const nextName = selectedPlcs.values().next().value;
+                const nextPlc = plcs.find(p => p.name === nextName);
+                if (nextPlc) selectPlc(nextPlc);
+                else selectPlc(null);
+            } else {
+                selectPlc(null);
+            }
         }
     }
 }
 
 function renderPlcList() {
     elPlcList.innerHTML = '';
-    plcs.forEach(plc => {
+    plcs.forEach((plc, index) => {
         const li = document.createElement('li');
-        li.className = `plc-item ${currentPlc && currentPlc.name === plc.name ? 'active' : ''}`;
+        const isActive = currentPlc && currentPlc.name === plc.name;
+        const isSelected = selectedPlcs.has(plc.name);
+        
+        li.className = `plc-item ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}`;
         li.innerHTML = `
-            <span class="plc-name">${plc.name}</span>
+            <div class="plc-item-left">
+                <div class="selection-indicator"></div>
+                <span class="plc-name">${plc.name}</span>
+            </div>
             <div class="status-indicator ${plc.is_running ? 'running' : ''}"></div>
         `;
-        li.onclick = () => selectPlc(plc);
+        li.onclick = (e) => selectPlc(plc, e.ctrlKey, e.shiftKey);
         elPlcList.appendChild(li);
     });
 }
 
-async function selectPlc(plc) {
-    currentPlc = plc;
+async function selectPlc(plc, ctrl = false, shift = false) {
+    if (!plc) {
+        currentPlc = null;
+        selectedPlcs.clear();
+        renderPlcList();
+        mainView.style.display = 'none';
+        emptyView.style.display = 'flex';
+        return;
+    }
+
+    if (shift && currentPlc) {
+        const fromIdx = plcs.findIndex(p => p.name === currentPlc.name);
+        const toIdx = plcs.findIndex(p => p.name === plc.name);
+        const start = Math.min(fromIdx, toIdx);
+        const end = Math.max(fromIdx, toIdx);
+        
+        if (!ctrl) selectedPlcs.clear();
+        for (let i = start; i <= end; i++) {
+            selectedPlcs.add(plcs[i].name);
+        }
+    } else if (ctrl) {
+        if (selectedPlcs.has(plc.name)) {
+            selectedPlcs.delete(plc.name);
+            // If we unselect the primary, pick another
+            if (currentPlc && currentPlc.name === plc.name) {
+                const nextName = selectedPlcs.values().next().value;
+                currentPlc = nextName ? plcs.find(p => p.name === nextName) : null;
+            }
+        } else {
+            selectedPlcs.add(plc.name);
+            currentPlc = plc;
+        }
+    } else {
+        selectedPlcs.clear();
+        selectedPlcs.add(plc.name);
+        currentPlc = plc;
+    }
+
     renderPlcList();
     
-    if (!plc) {
+    if (!currentPlc) {
         mainView.style.display = 'none';
         emptyView.style.display = 'flex';
         return;
@@ -82,30 +134,36 @@ async function selectPlc(plc) {
     mainView.style.display = 'flex';
     emptyView.style.display = 'none';
     
-    // Fill Config
-    elHeaderName.textContent = plc.name;
+    // Fill Config for Primary
+    elHeaderName.textContent = currentPlc.name + (selectedPlcs.size > 1 ? ` (+${selectedPlcs.size - 1} more)` : '');
     updateHeaderStatus();
     
-    inCfgName.value = plc.name;
-    inCfgPort.value = plc.port;
-    inCfgSeries.value = plc.series;
-    inCfgDiscInt.value = plc.disconnect_event.interval_sec;
-    inCfgDiscChan.value = plc.disconnect_event.chance_percent;
-    inCfgScriptInt.value = plc.script_interval_ms;
+    inCfgName.value = currentPlc.name;
+    inCfgPort.value = currentPlc.port;
+    inCfgSeries.value = currentPlc.series;
+    inCfgDiscInt.value = currentPlc.disconnect_event.interval_sec;
+    inCfgDiscChan.value = currentPlc.disconnect_event.chance_percent;
+    inCfgScriptInt.value = currentPlc.script_interval_ms;
     
     // Load Script
-    const res = await fetch(`/api/plcs/${plc.name}/script`);
+    const res = await fetch(`/api/plcs/${currentPlc.name}/script`);
     const data = await res.json();
     if (editor) {
         editor.setValue(data.code || '');
-    } else {
-        // Wait for monaco
-        setTimeout(() => editor && editor.setValue(data.code || ''), 500);
     }
     
     // Load Memory
     currentPage = 0;
     await fetchMemory();
+}
+
+function selectAllPlcs() {
+    selectedPlcs.clear();
+    plcs.forEach(p => selectedPlcs.add(p.name));
+    if (plcs.length > 0 && !currentPlc) {
+        currentPlc = plcs[0];
+    }
+    selectPlc(currentPlc);
 }
 
 function updateHeaderStatus() {
@@ -134,10 +192,18 @@ function renderMemoryTable() {
     const start = currentPage * PAGE_SIZE;
     elPageInfo.textContent = `D${start} - D${start + PAGE_SIZE - 1}`;
     
+    const decHeader = document.querySelector('#device-table th:nth-child(2)');
+    if (decHeader) decHeader.textContent = viewAsSigned ? 'Dec (Signed)' : 'Dec (16-bit)';
+
     for (let i = 0; i < PAGE_SIZE; i++) {
         const addr = start + i;
         const val = memoryCache[addr];
         
+        let displayVal = val;
+        if (viewAsSigned) {
+            displayVal = val > 32767 ? val - 65536 : val;
+        }
+
         // Convert to string (2 ASCII chars)
         const char1 = val & 0xFF;
         const char2 = (val >> 8) & 0xFF;
@@ -148,7 +214,7 @@ function renderMemoryTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>D${addr}</td>
-            <td class="val-dec" data-addr="${addr}">${val}</td>
+            <td class="val-dec" data-addr="${addr}">${displayVal}</td>
             <td class="val-hex" data-addr="${addr}">0x${val.toString(16).padStart(4, '0').toUpperCase()}</td>
             <td class="val-str" data-addr="${addr}">${str}</td>
         `;
@@ -214,14 +280,27 @@ function setupEventListeners() {
     };
 
     // Actions
+    document.getElementById('btn-select-all').onclick = selectAllPlcs;
+
     btnStart.onclick = async () => {
-        await fetch(`/api/plcs/${currentPlc.name}/start`, { method: 'POST' });
+        const promises = Array.from(selectedPlcs).map(name => 
+            fetch(`/api/plcs/${name}/start`, { method: 'POST' })
+        );
+        await Promise.all(promises);
         await fetchPlcs();
     };
     
     btnStop.onclick = async () => {
-        await fetch(`/api/plcs/${currentPlc.name}/stop`, { method: 'POST' });
+        const promises = Array.from(selectedPlcs).map(name => 
+            fetch(`/api/plcs/${name}/stop`, { method: 'POST' })
+        );
+        await Promise.all(promises);
         await fetchPlcs();
+    };
+    
+    document.getElementById('chk-signed').onchange = (e) => {
+        viewAsSigned = e.target.checked;
+        renderMemoryTable();
     };
     
     btnDelete.onclick = async () => {
@@ -297,7 +376,11 @@ function setupEventListeners() {
         const input = document.createElement('input');
         if (colIndex === 1) { // Dec
             input.type = 'number';
-            input.value = originalVal;
+            let displayVal = originalVal;
+            if (viewAsSigned) {
+                displayVal = originalVal > 32767 ? originalVal - 65536 : originalVal;
+            }
+            input.value = displayVal;
         } else if (colIndex === 2) { // Hex
             input.type = 'text';
             input.value = originalVal.toString(16).padStart(4, '0').toUpperCase();
@@ -332,8 +415,16 @@ function setupEventListeners() {
             }
 
             if (isNaN(newVal)) newVal = originalVal;
-            if (newVal < 0) newVal = 0;
-            if (newVal > 65535) newVal = 65535;
+            
+            // Handle signed input
+            if (viewAsSigned && colIndex === 1) {
+                if (newVal < -32768) newVal = -32768;
+                if (newVal > 32767) newVal = 32767;
+                newVal = newVal & 0xFFFF;
+            } else {
+                if (newVal < 0) newVal = 0;
+                if (newVal > 65535) newVal = 65535;
+            }
             
             if (newVal !== originalVal) {
                 // Save to backend
