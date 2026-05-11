@@ -31,8 +31,11 @@ let viewAsSigned = false;
 let currentPage = 0;
 const PAGE_SIZE = 100;
 let editor = null;
+let isEditing = false;
 let ws = null;
 let memoryCache = new Array(65536).fill(0);
+let previousMemoryCache = new Array(65536).fill(0);
+let lastFetchPage = -1;
 
 // Initialize
 async function init() {
@@ -180,14 +183,23 @@ async function fetchMemory() {
     const res = await fetch(`/api/plcs/${currentPlc.name}/memory?start=${start}&length=${PAGE_SIZE}`);
     const data = await res.json();
     if (!data.error) {
+        const isSamePage = (lastFetchPage === currentPage);
         for (let i = 0; i < data.values.length; i++) {
-            memoryCache[start + i] = data.values[i];
+            const addr = start + i;
+            if (isSamePage) {
+                previousMemoryCache[addr] = memoryCache[addr];
+            } else {
+                previousMemoryCache[addr] = data.values[i];
+            }
+            memoryCache[addr] = data.values[i];
         }
+        lastFetchPage = currentPage;
         renderMemoryTable();
     }
 }
 
 function renderMemoryTable() {
+    if (isEditing) return;
     tbBody.innerHTML = '';
     const start = currentPage * PAGE_SIZE;
     elPageInfo.textContent = `D${start} - D${start + PAGE_SIZE - 1}`;
@@ -211,12 +223,15 @@ function renderMemoryTable() {
         const s2 = (char2 >= 32 && char2 <= 126) ? String.fromCharCode(char2) : '.';
         const str = s1 + s2;
 
+        const hasChanged = val !== previousMemoryCache[addr];
+        const blinkClass = hasChanged ? 'blink-changed' : '';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>D${addr}</td>
-            <td class="val-dec" data-addr="${addr}">${displayVal}</td>
-            <td class="val-hex" data-addr="${addr}">0x${val.toString(16).padStart(4, '0').toUpperCase()}</td>
-            <td class="val-str" data-addr="${addr}">${str}</td>
+            <td class="val-dec ${blinkClass}" data-addr="${addr}">${displayVal}</td>
+            <td class="val-hex ${blinkClass}" data-addr="${addr}">0x${val.toString(16).padStart(4, '0').toUpperCase()}</td>
+            <td class="val-str ${blinkClass}" data-addr="${addr}">${str}</td>
         `;
         tbBody.appendChild(tr);
     }
@@ -353,6 +368,38 @@ function setupEventListeners() {
         }
     };
 
+    // Jump
+    const inJumpAddr = document.getElementById('in-jump-addr');
+    const btnJump = document.getElementById('btn-jump');
+
+    const jumpToAddr = () => {
+        let val = inJumpAddr.value.toUpperCase();
+        if (val.startsWith('D')) val = val.substring(1);
+        const addr = parseInt(val);
+        if (isNaN(addr) || addr < 0 || addr > 65535) {
+            alert('Invalid address. Enter 0 - 65535');
+            return;
+        }
+        currentPage = Math.floor(addr / PAGE_SIZE);
+        fetchMemory();
+        
+        // Scroll to the specific row after a short delay to allow rendering
+        setTimeout(() => {
+            const rows = tbBody.querySelectorAll('tr');
+            const rowIdx = addr % PAGE_SIZE;
+            if (rows[rowIdx]) {
+                rows[rowIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                rows[rowIdx].style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                setTimeout(() => rows[rowIdx].style.backgroundColor = '', 2000);
+            }
+        }, 300);
+    };
+
+    btnJump.onclick = jumpToAddr;
+    inJumpAddr.onkeydown = (e) => {
+        if (e.key === 'Enter') jumpToAddr();
+    };
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.onclick = () => {
@@ -394,6 +441,7 @@ function setupEventListeners() {
             input.value = s1 + s2;
         }
         
+        isEditing = true;
         td.classList.add('cell-editing');
         td.innerHTML = '';
         td.appendChild(input);
@@ -401,6 +449,8 @@ function setupEventListeners() {
         if (input.type === 'text') input.select();
         
         const finishEdit = async () => {
+            if (!isEditing) return;
+            isEditing = false;
             td.classList.remove('cell-editing');
             let newVal;
             if (colIndex === 1) { // Dec
@@ -442,6 +492,7 @@ function setupEventListeners() {
         input.onkeydown = (e) => {
             if (e.key === 'Enter') finishEdit();
             if (e.key === 'Escape') {
+                isEditing = false;
                 td.classList.remove('cell-editing');
                 renderMemoryTable();
             }
